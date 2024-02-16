@@ -2,12 +2,24 @@ open Utils
 open Ast
 
 (* TODO: define your own types *)
-type ty = Int | Bool
+type ty  = Int | Bool | Double | Char | String 
+  | List of ty
+  | Pair of {
+      fst : ty;
+      snd : ty;
+    }
+  | Unit
 
-let string_of_type(t: ty) : string =
+let rec string_of_type(t: ty) : string =
   match t with
   | Int -> "int"
   | Bool -> "bool"
+  | Double -> "double"
+  | Char -> "char"
+  | String -> "string"
+  | List r -> "[" ^ string_of_type r ^ "]"
+  | Pair r -> "(" ^ string_of_type r.fst ^ "," ^ string_of_type r.snd ^ ")"
+  | Unit -> "()"
 
 (* TODO: define your own type checking *)
 let rec typecheck_prog(p : unit prog) : ty prog option =
@@ -33,8 +45,8 @@ let rec typecheck_prog(p : unit prog) : ty prog option =
     )
     | _ -> None
   )
-  | BinExpr ({op = LOr; _} as r)
-  | BinExpr ({op = LAnd; _} as r) -> (
+  | BinExpr ({op = BoolOr; _} as r)
+  | BinExpr ({op = BoolAnd; _} as r) -> (
     match (typecheck_prog r.left, typecheck_prog r.right) with
     | (Some left', Some right') -> (
         match (prop_of_prog left', prop_of_prog right') with
@@ -52,6 +64,7 @@ let rec typecheck_prog(p : unit prog) : ty prog option =
     )
     | _ -> None
   )
+  | _ -> None
 
 let typecheck(p : unit prog) : bool =
   match typecheck_prog p with
