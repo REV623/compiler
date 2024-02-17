@@ -491,7 +491,6 @@ let prop_of_prog(prog : 't prog) : 't = match prog with
   | FuncType  r -> r.prop
   | Case r -> r.prop
 
-
 (*
 (* TODO: define pretty-printing *)
 let rec string_of_prog prog : string = match prog with

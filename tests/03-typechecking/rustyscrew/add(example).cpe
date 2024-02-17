@@ -1,1 +1,7 @@
-4+0*8
+import utills
+
+def main (arg : String) : String = 1 + 2
+
+def main (arg : String) : String = True && 5
+
+def main (arg : String) : String = 'A'
