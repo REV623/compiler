@@ -336,7 +336,6 @@ and typecheck_expr(p : unit prog)(env : binding list) : ty prog option =
                 conseq = cons;
                 alter = alt;
               }) else None
-              | _ -> None
           )
           | _ -> None
         )
