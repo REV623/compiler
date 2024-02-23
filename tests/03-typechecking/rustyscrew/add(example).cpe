@@ -1,17 +1,20 @@
 import utills
 
-def main (arg : String) : String = (1 + 2.0) * (5.25 - 3) / (-10 // 5 % 6)
+data IntList = EmptyIntList | ConsIntList Int IntList
+data List a = Empty | Cons a (List a)
 
-def main (arg : String) : String = True && False || True
+def main (arg : Tree Int) : String = (1 + 2.0) * (5.25 - 3) / (-10 // 5 % 6)
 
-def main (arg : String) : String = 'A'
+def main1 (arg : String) : String = True && False || True
 
-def main (arg : String) : String = "hello"
+def main2 (arg : String) : String = 'A'
 
-def main (arg : String) : String = if 1 >= 2.0 then 1 else 2
+def main3 (arg : String) : String = "hello"
 
-def main (arg : String) : String = if 5.0 == 5 then 1 else 2
+def main4 (arg : String) : String = if 1 >= 2.0 then 1 else 2
 
-def main (arg : String) : String = 1::2::[]
+def main5 (arg : String) : String = if 5.0 == 5 then 1 else 2
 
-def main (arg : String) : String = (1::2::[])++(3::[])
+def main6 (arg : String) : String = 1::2::[]
+
+def main7 (arg : String) : String = (1::2::[])++(3::[])
