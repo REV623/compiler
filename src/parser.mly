@@ -163,18 +163,18 @@ constructor_list:
   | cons = constructor; { cons::[] }
 
 constructor:
-  | consName = TYPECONS; cp_list = cons_param_list; { Cons {
+  | consName = TYPECONS; cp_list = cons_param_type_list; { Cons {
       prop = ();
       pos = $loc;
       cons_name = consName;
       cons_param_list = cp_list;
     }}
 
-cons_param_list:
-  | cp = cons_param; cp_list = cons_param_list; { cp::cp_list }
+cons_param_type_list:
+  | cp = cons_param_type; cp_list = cons_param_type_list; { cp::cp_list }
   | { [] }
 
-cons_param:
+cons_param_type:
   | type_var = IDENT; { TypeVar {
       prop = ();
       pos = $loc;
@@ -188,16 +188,18 @@ cons_param:
   | "("; dt = data_type; ")"; { dt }
 
 data_type:
-  | dataname = TYPECONS; tv_list = type_vars_list_for_data; { DataType {
+  | dataname = TYPECONS; tv_list = type_list_for_data; { DataType {
       prop = ();
       pos = $loc;
       name = dataname;
       tv_list = tv_list;
     }}
 
-type_vars_list_for_data:
-  | tv = IDENT; tv_list = type_vars_list_for_data { tv::tv_list }
+type_list_for_data:
+  | tv = IDENT; tv_list = type_list_for_data { tv::tv_list }
   | tv = IDENT; { tv::[] }
+  | tc = TYPECONS; tc_list = type_list_for_data { tc::tc_list }
+  | tc = TYPECONS; { tc::[] }
 
 type_def:
   | TYPE; typename = TYPECONS; tv_list = type_vars_list; "="; data = data_type; { TypeDef {
@@ -240,7 +242,7 @@ type_of_arg:
       pos = $loc;
       name = tc; 
     }}
-  | tv = IDENT { TypeCons {
+  | tv = IDENT { TypeVar {
       prop = ();
       pos = $loc;
       name = tv; 
@@ -256,7 +258,7 @@ types:
       pos = $loc;
       name = tc; 
     }}
-  | tv = IDENT { TypeCons {
+  | tv = IDENT { TypeVar {
       prop = ();
       pos = $loc;
       name = tv; 

@@ -2,37 +2,55 @@ open Utils
 open Ast
 
 (* TODO: define your own types *)
-type ty  = Integer | Bool | Double | Char | String
+type ty = Integer | Bool | Double | Char | String
   | TypeVar of {
-    name : string;
-  }
-  | List of ty
+      name : string;
+    }
+  | List of {
+      list_type : ty;
+    }
   | Pair of {
       fst : ty;
       snd : ty;
     }
   | Func of {
-    param : ty;
-    func : ty;
-  }
+      ltype : ty;
+      rtype : ty;
+    }
   | Data of {
-    name : string;
-    tv_list : ty list;
-    cons_list : ty list;
-  }
+      name : string;
+      ty_param_list : string list;
+    }
+  | DataDecl of {
+      name : string;
+      tv_list : ty list;
+      cons_list : ty list;
+    }
   | Constructor of {
-    name : string;
-    functype : ty;
-    data : ty;
-  }
+      name : string;
+      functype : ty;
+      data : ty;
+    }
   | Unit
   | EmptyList
 
 type binding = 
   | Map of {
-    name : string;
-    typ : ty;
-  }
+      name : string;
+      typ : ty;
+    }
+
+module SymTable = Map.Make(String)
+
+module Env = struct
+  let rec lookup envs name = match envs with
+    | [] -> None
+    | e::es -> match SymTable.find_opt name e with
+      | None -> lookup es name
+      | res -> res
+  let add env name t = SymTable.add name t env
+  let push envs = SymTable.empty::envs
+end
 
 let rec find_binding_type(env : binding list)(name : string) : ty =
   match env with
@@ -47,32 +65,120 @@ let rec string_of_type(t: ty) : string =
   | Char -> "Char"
   | String -> "String"
   | TypeVar r -> r.name
-  | List r -> "[" ^ string_of_type r ^ "]"
+  | List r -> "[" ^ string_of_type r.list_type ^ "]"
   | Pair r -> "(" ^ string_of_type r.fst ^ "," ^ string_of_type r.snd ^ ")"
-  | Func r -> string_of_type r.param ^ "->" ^ string_of_type r.func
-  | Data r -> r.name ^ (let rec str_loop tv_list : string = match tv_list with | hd::tl -> string_of_type hd ^ " " ^ str_loop tl | [] -> "" in str_loop r.tv_list)
+  | Func r -> string_of_type r.ltype ^ "->" ^ string_of_type r.rtype
+  | Data r -> r.name ^ (let rec str_loop list : string = match list with | hd::tl -> hd ^ " " ^ str_loop tl | [] -> "" in str_loop r.ty_param_list)
+  | DataDecl r -> r.name ^ (let rec str_loop tv_list : string = match tv_list with | hd::tl -> string_of_type hd ^ " " ^ str_loop tl | [] -> "" in str_loop r.tv_list)
   | Constructor r -> r.name
   | Unit -> "()"
   | EmptyList -> "[]"
 
 (* TODO: define your own type checking *)
 let rec typecheck_prog(p : unit prog) : ty prog option =
-  let env = [] in
   match p with
   | Prog r -> (
-    match (typecheck_imp_list r.imp_list, typecheck_defn_list r.defn_list env) with
-    | (imp_list, Some defn_list) -> Some (Prog {r with
-        prop = Unit;
-        imp_list = imp_list;
-        defn_list = defn_list;
-      })
-    | _ -> None
+    match visit_data_defn_list r.defn_list with
+    | None -> None
+    | Some env -> (
+      match visit_func_defn_list r.defn_list env with
+      | None -> None 
+      | Some env' -> if (Option.is_some (SymTable.find_opt "main" env')) then (
+        match (typecheck_imp_list r.imp_list, typecheck_defn_list r.defn_list (env'::[])) with
+        | (imp_list, Some defn_list) -> Some (Prog {r with
+            prop = Unit;
+            imp_list = imp_list;
+            defn_list = defn_list;
+          })
+        | _ -> None
+      ) else (
+        prerr_string ("main function is not declared.\n");
+        None
+      )
+    )
   )
   | _ -> None
 and typecheck_imp_list imp_list : ty prog list = 
   match imp_list with
   | hd::td -> typecheck_imp hd::typecheck_imp_list td
   | [] -> []
+and visit_data_defn_list defn_list : ty SymTable.t option =
+  match defn_list with
+  | hd::td -> (
+    match hd with 
+    | DataDef r -> (
+      match visit_data_defn_list td with
+      | None -> None
+      | Some env -> (
+        match (SymTable.find_opt r.data_name env, (List.length (List.sort_uniq String.compare r.tv_list)) == List.length r.tv_list) with
+        | (None, true) -> Some (Env.add env r.data_name (Data {
+            name = r.data_name;
+            ty_param_list = r.tv_list;
+        }))
+        | (None, false) -> prerr_string
+          (string_of_positions r.pos
+            ^ ": type variable name is duplicated in -> "
+            ^ r.data_name ^ "\n");
+          None
+        | _ -> prerr_string
+          (string_of_positions r.pos 
+            ^ ": Data name is duplicated. -> "
+            ^ r.data_name ^ "\n");
+          None
+      )
+    )
+    | _ -> visit_data_defn_list td
+  )
+  | [] -> Some SymTable.empty
+and visit_func_defn_list defn_list env : ty SymTable.t option =
+    match defn_list with
+    | hd::td -> (
+      match hd with 
+      | FuncDef r -> (
+        match visit_func_defn_list td env with
+        | None -> None
+        | Some env' -> (
+          match SymTable.find_opt r.func_name env' with
+          | None -> Some (Env.add env' r.func_name (visit_func_defn hd env'
+          ))
+          | _ -> prerr_string
+            (string_of_positions r.pos 
+              ^ ": Function name is duplicated. -> "
+              ^ r.func_name ^ "\n");
+            None
+        )
+      )
+      | _ -> visit_func_defn_list td env
+    )
+    | [] -> Some env
+    
+and visit_func_defn defn _env : ty =
+  match defn with
+  | FuncDef r -> let rec find_func_type arg_list : ty =
+    match arg_list with 
+    | Arg hd::td -> Func { 
+        ltype = find_type hd.types;
+        rtype = find_func_type td;
+      }
+    | [] -> find_type r.return_type
+    | _ -> assert false
+    in find_func_type r.arg_list
+  | _ -> assert false
+and find_type typ : ty = 
+  match typ with
+  | TypeVar r -> TypeVar { name = r.name; }
+  | TypeCons r -> Data { name = r.name; ty_param_list = []; }
+  | ListType r -> List { list_type = find_type r.type_of_list; }
+  | PairType r -> Pair {
+      fst = find_type r.fst_type;
+      snd = find_type r.snd_type;
+    }
+  | FuncType r -> Func {
+      ltype = find_type r.typeLeft;
+      rtype = find_type r.typeRight;
+    }
+  | DataType r -> Data { name = r.name; ty_param_list = []; } (*find in env!!!*)
+  | _ -> Unit
 and typecheck_defn_list defn_list env : ty prog list option = 
   match defn_list with
   | hd::td -> (
@@ -89,9 +195,9 @@ and typecheck_imp imp : ty prog =
   match imp with
   | Import r -> (Import {r with prop = Unit})
   | _ -> assert false
-and typecheck_defn(p : unit prog)(env : binding list) : ty prog option =
+and typecheck_defn(p : unit prog) env : ty prog option =
   match p with
-  | DataDef _r -> None
+  | DataDef _r -> Some (EmptyList {prop = List { list_type = EmptyList }})
   | TypeDef _r -> None
   | FuncDef r -> (
     match typecheck_expr r.expr env with
@@ -104,16 +210,20 @@ and typecheck_defn(p : unit prog)(env : binding list) : ty prog option =
     | _ -> None
   )
   | _ -> None
-and typecheck_expr(p : unit prog)(env : binding list) : ty prog option =
+and typecheck_expr(p : unit prog) env : ty prog option =
   match p with
   | IntLit r -> Some (IntLit {r with prop = Integer})
   | FloatLit r -> Some (FloatLit {r with prop = Double})
   | BoolLit r -> Some (BoolLit {r with prop = Bool})
   | CharLit r -> Some (CharLit {r with prop = Char})
   | StringLit r -> Some (StringLit {r with prop = String})
-  | Ident r -> Some (Ident {r with prop = find_binding_type env r.name})
+  | Ident r -> (
+    match Env.lookup env r.name with 
+    | Some t -> Some (Ident {r with prop = t})
+    | None -> None
+  )
   | Unit _r -> Some (Unit {prop = Unit})
-  | EmptyList _r -> Some (EmptyList {prop = List EmptyList}) (* prop = List EmptyList ??? *)
+  | EmptyList _r -> Some (EmptyList {prop = List { list_type = EmptyList }}) (* prop = List EmptyList ??? *)
   | UnaExpr ({op = Sub; _} as r) -> (
     match typecheck_expr r.expr env with
     | Some expr' -> (
@@ -297,8 +407,8 @@ and typecheck_expr(p : unit prog)(env : binding list) : ty prog option =
     match (typecheck_expr r.left env, typecheck_expr r.right env) with
     | (Some left', Some right') -> (
         match (prop_of_prog left', prop_of_prog right') with
-        | (t1, List t2) -> if (t1 == t2 || t2 == EmptyList) then (Some (BinExpr {r with
-              prop = List t1;
+        | (t1, List t2) -> if (t1 == t2.list_type || t2.list_type == EmptyList) then (Some (BinExpr {r with
+              prop = List { list_type = t1; };
               left = left';
               right = right';
             })
@@ -306,7 +416,7 @@ and typecheck_expr(p : unit prog)(env : binding list) : ty prog option =
               (string_of_positions r.pos 
                 ^ ": expected bool operands, but found "
                 ^ string_of_type t1 ^ ", "
-                ^ string_of_type t2 ^ "\n");
+                ^ string_of_type t2.list_type ^ "\n");
               None
           )
         | (t1, t2) -> prerr_string
@@ -322,7 +432,7 @@ and typecheck_expr(p : unit prog)(env : binding list) : ty prog option =
     match (typecheck_expr r.left env, typecheck_expr r.right env) with
     | (Some left', Some right') -> (
         match (prop_of_prog left', prop_of_prog right') with
-        | (List t1, List t2) -> if (t1 == t2 || t1 == EmptyList || t2 == EmptyList) then (Some (BinExpr {r with
+        | (List t1, List t2) -> if (t1.list_type == t2.list_type || t1.list_type == EmptyList || t2.list_type == EmptyList) then (Some (BinExpr {r with
               prop = List t1;
               left = left';
               right = right';
@@ -330,8 +440,8 @@ and typecheck_expr(p : unit prog)(env : binding list) : ty prog option =
           ) else (prerr_string
               (string_of_positions r.pos 
                 ^ ": expected bool operands, but found "
-                ^ string_of_type t1 ^ ", "
-                ^ string_of_type t2 ^ "\n");
+                ^ string_of_type t1.list_type ^ ", "
+                ^ string_of_type t2.list_type ^ "\n");
               None
           )
         | (t1, t2) -> prerr_string
