@@ -1,0 +1,1 @@
+def main (arg : String) : String = 5 < "GGEZ"

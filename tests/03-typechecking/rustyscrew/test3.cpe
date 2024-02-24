@@ -1,0 +1,1 @@
+def main (arg : Int) : Int = 5 + 2
