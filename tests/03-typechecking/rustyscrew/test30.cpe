@@ -1,0 +1,1 @@
+def main (arg : String) : String = if (0.12314 + 5 * 00000) >= 567.9234234 then 1 else 2
