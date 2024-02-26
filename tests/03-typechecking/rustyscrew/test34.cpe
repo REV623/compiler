@@ -1,0 +1,2 @@
+def main (arg : String) : String =  # ignores input
+  "D is my compiler design grade \rA"

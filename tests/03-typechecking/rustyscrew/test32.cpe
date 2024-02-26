@@ -1,0 +1,2 @@
+def main (arg : String) : String =  # ignores input
+  "Rose are red\nViolet are not blue\nWake up from delusion\It\'s not good for you"

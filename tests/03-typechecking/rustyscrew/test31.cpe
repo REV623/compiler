@@ -1,0 +1,2 @@
+def main (arg : String) : String =  # ignores input
+  "      Jar Jar Binks\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\bDarth"

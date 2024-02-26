@@ -1,0 +1,2 @@
+def main (arg : String) : String =  # ignores input
+  "There is no stranger to love..."

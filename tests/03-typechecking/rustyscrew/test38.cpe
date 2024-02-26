@@ -1,0 +1,4 @@
+def main (arg : String) : String = 
+    match parseFloatList arg with 
+    | a::b::[] -> showFloat (a /. b) 
+    | _ -> error "expected 2 floats"
