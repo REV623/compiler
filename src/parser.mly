@@ -1,84 +1,3 @@
-(*
-(** header section **)
-%{
-open Ast
-%}
-
-(** declarations section **)
-
-(* token declarations *)
-%token <int> INT_LIT
-%token TRUE "true"
-%token FALSE "false"
-%token PLUS "+" TIMES "*"
-%token OROR "||" ANDAND "&&"
-%token LPAREN "(" RPAREN ")"
-%token EOF
-
-(* precedence and associativity declarations *)
-%left OROR
-%left ANDAND
-%left PLUS
-%left TIMES
-
-(* starting nonterminal *)
-%start <unit prog> start
-%%
-
-(** rules section **)
-start:
-  | prog = prog; EOF { prog }
-
-prog:
-  | e = expr { e }
-
-expr:
-  | e1 = expr; "+"; e2 = expr { BinExpr {
-      prop = ();
-      pos = $loc;
-      op = Add;
-      left = e1;
-      right = e2;
-    }}
-  | e1 = expr; "*"; e2 = expr { BinExpr {
-      prop = ();
-      pos = $loc;
-      op = Mult;
-      left = e1;
-      right = e2;
-    }}
-  | e1 = expr; "||"; e2 = expr { BinExpr {
-      prop = ();
-      pos = $loc;
-      op = LOr;
-      left = e1;
-      right = e2;
-    }}
-  | e1 = expr; "&&"; e2 = expr { BinExpr {
-      prop = ();
-      pos = $loc;
-      op = LAnd;
-      left = e1;
-      right = e2;
-    }}
-  | "true" { BoolLit {
-      prop = ();
-      pos = $loc;
-      value = true;
-    }}
-  | "false" { BoolLit {
-      prop = ();
-      pos = $loc;
-      value = false;
-    }}
-  | n = INT_LIT { IntLit {
-      prop = ();
-      pos = $loc;
-      value = n;
-    }}
-  | "("; e = expr; ")" { e }
-*)
-
 (** header section **)
 %{
 open Ast
@@ -171,35 +90,8 @@ constructor:
     }}
 
 cons_param_type_list:
-  | cp = cons_param_type; cp_list = cons_param_type_list; { cp::cp_list }
+  | cp = types; cp_list = cons_param_type_list; { cp::cp_list }
   | { [] }
-
-cons_param_type:
-  | type_var = IDENT; { TypeVar {
-      prop = ();
-      pos = $loc;
-      name = type_var; 
-    }}
-  | type_of_param = TYPECONS; { TypeCons {
-      prop = ();
-      pos = $loc;
-      name = type_of_param; 
-    }}
-  | "("; dt = data_type; ")"; { dt }
-
-data_type:
-  | dataname = TYPECONS; tv_list = type_list_for_data; { DataType {
-      prop = ();
-      pos = $loc;
-      name = dataname;
-      tv_list = tv_list;
-    }}
-
-type_list_for_data:
-  | tv = IDENT; tv_list = type_list_for_data { tv::tv_list }
-  | tv = IDENT; { tv::[] }
-  | tc = TYPECONS; tc_list = type_list_for_data { tc::tc_list }
-  | tc = TYPECONS; { tc::[] }
 
 type_def:
   | TYPE; typename = TYPECONS; tv_list = type_vars_list; "="; data = data_type; { TypeDef {
@@ -237,34 +129,28 @@ arg:
     }}
 
 type_of_arg:
-  | tc = TYPECONS { TypeCons {
-      prop = ();
-      pos = $loc;
-      name = tc; 
-    }}
-  | tv = IDENT { TypeVar {
-      prop = ();
-      pos = $loc;
-      name = tv; 
-    }}
-  | dt = data_type { dt }
-  | lt = list_type { lt }
-  | pt = pairs_type { pt }
+  | ty = types_all { ty }
   | ft = func_type { ft }
 
+types_all:
+  | ty = types { ty }
+  | dt = data_type; { dt }
+
 types:
-  | tc = TYPECONS { TypeCons {
-      prop = ();
-      pos = $loc;
-      name = tc; 
-    }}
   | tv = IDENT { TypeVar {
       prop = ();
       pos = $loc;
       name = tv; 
     }}
+  | tc = TYPECONS { DataType {
+      prop = ();
+      pos = $loc;
+      name = tc;
+      ty_list = [];
+    }}
   | lt = list_type { lt }
   | pt = pairs_type { pt }
+  | "("; ty = data_type; ")"; { ty }
 
 list_type:
   | "["; t = types; "]" { ListType {
@@ -280,6 +166,18 @@ pairs_type:
       fst_type = t1;
       snd_type = t2;
     }}
+
+data_type:
+  | dataname = TYPECONS; ty_list = type_list_for_data; { DataType {
+      prop = ();
+      pos = $loc;
+      name = dataname;
+      ty_list = ty_list;
+    }}
+
+type_list_for_data:
+  | ty = types; ty_list = type_list_for_data { ty::ty_list }
+  | ty = types; { ty::[] }
 
 func_type:
   | t = types; "->"; ft = func_type; { FuncType {

@@ -1,13 +1,18 @@
 import utills
 
-data IntList = EmptyIntList | ConsIntList Int IntList
+data IntList = EmptyIntList | ConsIntList Integer IntList
+data Tree a = Leaf | Node a (Tree a) (Tree a)
 data List a = Empty | Cons a (List a)
+data PairList a b = EmptyPairList | ConsPairList (a,b) (PairList a b)
+data Pair a b = Pair a b
+(*type PairList a b = List (Pair a b)*)
+data ListList a = EmptyListList | ConsListList [a] (ListList a)
 
-def main (arg : Tree Int) : String = (1 + 2.0) * (5.25 - 3) / (-10 // 5 % 6)
+def main (arg : Tree (List Integer)) : String = (1 + 2.0) * (5.25 - 3) / (-10 // 5 % 6)
 
-def main1 (arg : String) : String = True && False || True
+def main1 (arg : PairList c d) : String = True && False || True
 
-def main2 (arg : String) : String = 'A'
+def main2 (arg : a -> Bool -> (List a)) : String = 'A'
 
 def main3 (arg : String) : String = "hello"
 
@@ -18,3 +23,22 @@ def main5 (arg : String) : String = if 5.0 == 5 then 1 else 2
 def main6 (arg : String) : String = 1::2::[]
 
 def main7 (arg : String) : String = (1::2::[])++(3::[])
+(*
+def main8 (arg : String) : List Integer = Cons 1 (Cons 2 Empty)
+*)
+(* stack overflow -> maybe cause by lambda expr
+import pervasives
+
+def reverse (xs : [a]) : [a] =
+  foldl (\ (acc : [a]) (x : a) : [a] => x::acc) [] xs
+
+def parseInt (str : String) : Integer =
+  match str with
+  | [] -> error "not a number"
+  | hd::tl -> if hd == '-'
+        then 0 - parseInt tl
+        else foldl (\ (acc : Integer) (d : Integer) : Integer => 10 * acc + d)
+                0 (map charToDigit str)
+
+def main (arg : String) : String = arg  # does nothing
+*)
