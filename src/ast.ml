@@ -272,21 +272,10 @@ type 't prog =
       arg_name : string;
       types : 't prog;
     }
-  | TypeCons of {
-      prop : 't;
-      pos : pos;
-      name : string;
-    }
   | TypeVar of {
       prop : 't;
       pos : pos;
       name : string;
-    }
-  | DataType of {
-      prop : 't;
-      pos : pos;
-      name : string;
-      tv_list : (string list)
     }
   | ListType of {
       prop : 't;
@@ -298,6 +287,12 @@ type 't prog =
       pos : pos;
       fst_type : 't prog;
       snd_type : 't prog;
+    }
+  | DataType of {
+      prop : 't;
+      pos : pos;
+      name : string;
+      ty_list : ('t prog list)
     }
   | FuncType of {
       prop : 't;
@@ -483,7 +478,6 @@ let prop_of_prog(prog : 't prog) : 't = match prog with
   | FuncDef r -> r.prop
   | Cons r -> r.prop
   | Arg r -> r.prop
-  | TypeCons r -> r.prop
   | TypeVar r -> r.prop
   | DataType r -> r.prop
   | ListType r -> r.prop
@@ -547,21 +541,19 @@ and string_of_constructor constructor : string = match constructor with
       | _ -> "(" ^ r.cons_name ^ " " ^ string_of_cons_param_list r.cons_param_list ^ ")")
   | _ -> ""
 and string_of_cons_param_list cons_param_list : string = match cons_param_list with
-  | hd::tl -> string_of_cons_param hd ^ " " ^ string_of_cons_param_list tl
+  | hd::tl -> string_of_typeExpr hd ^ " " ^ string_of_cons_param_list tl
   | [] -> ""
-and string_of_cons_param cons_param : string = match cons_param with
-  | TypeVar r -> r.name
-  | TypeCons r -> r.name
-  | DataType _ -> string_of_typeExpr cons_param
-  | _ -> ""
 and string_of_param param : string = match param with
   | Arg r::tl -> "(" ^ r.arg_name ^ " " ^ string_of_typeExpr r.types ^ ") " ^ string_of_param tl
   | [] -> ""
   | _ -> ""
 and string_of_typeExpr types : string = match types with
-  | TypeCons r -> r.name
   | TypeVar r -> r.name
-  | DataType r -> "(" ^ r.name ^ " " ^ (let rec str_loop tv_list : string = match tv_list with | hd::tl -> hd ^ " " ^ str_loop tl | [] -> "" in str_loop r.tv_list) ^ ")"
+  | DataType r -> (
+    match r.ty_list with
+    | _::_ -> "(" ^ r.name ^ " " ^ (let rec str_loop ty_list : string = match ty_list with | hd::tl -> string_of_typeExpr hd ^ " " ^ str_loop tl | [] -> "" in str_loop r.ty_list) ^ ")"
+    | [] -> r.name
+  )
   | ListType r -> "([] " ^ string_of_typeExpr r.type_of_list ^ ")"
   | PairType r -> "(, " ^ string_of_typeExpr r.fst_type ^ " " ^ string_of_typeExpr r.snd_type ^ ")"
   | FuncType r -> "(-> " ^ string_of_typeExpr r.typeLeft ^ " " ^ string_of_typeExpr r.typeRight ^ ")"
