@@ -6,7 +6,7 @@ Lists of responsibilities of each members :
   - 640610633 (Nutthachai Singkaewvong (Boss)) :
     - Responsible for 25% contribution of of typechecking and 10 test case, which made up to 20% of all repository
   - 640612184 (Nutsuphat Thaumpan (Tang)) :
-    - Responsible for contribution of some part of typechecking and 15 test case, which made up to 10% of all repository
+    - Responsible for contribution of some part of typechecking and 30 test case, which made up to 10% of all repository
 
 Implementation Issue :
   - Upon latest evaluation, there is no evident instance of implementation issue on developed typechecking files.
