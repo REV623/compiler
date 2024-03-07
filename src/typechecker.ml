@@ -33,12 +33,6 @@ type ty = Integer | Bool | Double | Char | String
   | Unit
   | EmptyList
 
-type binding = 
-  | Map of {
-      name : string;
-      typ : ty;
-    }
-
 module SymTable = Map.Make(String)
 
 module Env = struct
@@ -51,11 +45,6 @@ module Env = struct
   let push envs = SymTable.empty::envs
 end
 
-let rec find_binding_type(env : binding list)(name : string) : ty =
-  match env with
-  | Map hd::tl -> if String.equal hd.name name then hd.typ else find_binding_type tl name
-  | [] -> assert false
-
 let rec string_of_type(t: ty) : string =
   match t with
   | Integer -> "Integer"
@@ -67,11 +56,41 @@ let rec string_of_type(t: ty) : string =
   | List r -> "[" ^ string_of_type r.list_type ^ "]"
   | Pair r -> "(" ^ string_of_type r.fst ^ "," ^ string_of_type r.snd ^ ")"
   | Func r -> string_of_type r.ltype ^ "->" ^ string_of_type r.rtype
-  | Data r -> r.name ^ (let rec str_loop list : string = match list with | hd::tl -> string_of_type hd ^ " " ^ str_loop tl | [] -> "" in str_loop r.ty_param_list)
-  | DataDecl r -> r.name ^ (let rec str_loop tv_list : string = match tv_list with | hd::tl -> hd ^ " " ^ str_loop tl | [] -> "" in str_loop r.tv_list)
+  | Data r -> r.name ^ " " ^ (let rec str_loop list : string = match list with | hd::tl -> string_of_type hd ^ " " ^ str_loop tl | [] -> "" in str_loop r.ty_param_list)
+  | DataDecl r -> r.name ^ " " ^ (let rec str_loop tv_list : string = match tv_list with | hd::tl -> hd ^ " " ^ str_loop tl | [] -> "" in str_loop r.tv_list)
   | Constructor r -> r.name
   | Unit -> "()"
-  | EmptyList -> "[]"
+  | EmptyList -> ""
+
+let rec type_compare(t1 : ty)(t2 : ty) : bool = (*for emptylist is every [] type*)
+  match (t1, t2) with
+  | (Unit, Unit)
+  | (Integer, Integer)
+  | (Bool, Bool)
+  | (Double, Double)
+  | (Char, Char)
+  | (String, String)
+  | (List _, List {list_type = EmptyList})
+  | (List {list_type = EmptyList}, List _) -> true
+  | (Var t1', Var t2') -> String.equal t1'.name t2'.name
+  | (List t1', List t2') -> type_compare t1'.list_type t2'.list_type
+  | (Pair t1', Pair t2') -> (type_compare t1'.fst t2'.fst) && (type_compare t1'.snd t2'.snd)
+  | (Func t1', Func t2') -> (type_compare t1'.ltype t2'.ltype) && (type_compare t1'.rtype t2'.rtype)
+  | (Data t1', Data t2') -> (String.equal t1'.name t2'.name) &&
+    let rec looplist l1 l2 : bool =
+      if List.length l1 == List.length l2
+      then
+        match (l1, l2) with
+        | (hd1::tl1, hd2::tl2) -> (type_compare hd1 hd2) && (looplist tl1 tl2)
+        | ([], []) -> true
+        | _ -> false
+      else false
+    in looplist t1'.ty_param_list t2'.ty_param_list
+  | (Data d, DataDecl dc)
+  | (DataDecl dc, Data d) -> String.equal d.name dc.name
+  | (Var _, _)
+  | (_, Var _) -> true
+  | _ -> false
 
 (* TODO: define your own type checking *)
 let rec typecheck_prog(p : unit prog) : ty prog option =
@@ -83,12 +102,16 @@ let rec typecheck_prog(p : unit prog) : ty prog option =
       match visit_func_defn_list r.defn_list env with
       | None -> None 
       | Some env' -> if (Option.is_some (SymTable.find_opt "main" env')) then (
-        match (typecheck_imp_list r.imp_list, typecheck_defn_list r.defn_list (env'::[])) with
-        | (imp_list, Some defn_list) -> Some (Prog {r with
+        match typecheck_data_defn_list r.defn_list (env'::[]) with
+        | Some (data_defn_list, env'') -> (
+          match (typecheck_imp_list r.imp_list, typecheck_func_defn_list r.defn_list env'') with
+          | (imp_list, Some (func_defn_list)) -> Some (Prog {r with
             prop = Unit;
             imp_list = imp_list;
-            defn_list = defn_list;
+            defn_list = (List.append data_defn_list func_defn_list);
           })
+          | _ -> None
+        )
         | _ -> None
       ) else (
         prerr_string ("main function is not declared.\n");
@@ -379,86 +402,55 @@ and typecheck_types(typ : unit prog) env (data : ty option) : ty prog option =
     | _ -> None
   )
   | _ -> assert false
-and typecheck_defn_list defn_list env : ty prog list option = 
-  match typecheck_data_defn_list defn_list env with
-  | None -> None
-  | Some data_list -> (
-    match typecheck_func_defn_list defn_list env with
-    | None -> None
-    | Some func_list -> Some (List.append data_list func_list)
-  )
-and typecheck_data_defn_list defn_list env : ty prog list option =
+and typecheck_data_defn_list defn_list env : (ty prog list * ty SymTable.t list) option =
   match defn_list with
   | hd::tl -> (
     match hd with
     | DataDef _r -> (
-      match typecheck_defn hd env with
+      match typecheck_data_defn hd env with
       | None -> None
-      | Some data -> (
-        match typecheck_data_defn_list tl env with
+      | Some (data, env')-> (
+        match typecheck_data_defn_list tl env' with
         | None -> None
-        | Some data_list -> Some (data::data_list)
+        | Some (data_list, env'') -> Some ((data::data_list), (List.append env' env''))
       )
     )
     | _ -> typecheck_data_defn_list tl env
   )
-  | [] -> Some []
-and typecheck_func_defn_list defn_list env : ty prog list option =
-  match defn_list with
-  | hd::tl -> (
-    match hd with
-    | FuncDef _r -> (
-      match typecheck_defn hd env with
-      | None -> None
-      | Some func -> (
-        match typecheck_func_defn_list tl env with
-        | None -> None
-        | Some func_list -> Some (func::func_list)
-      )
-    )
-    | _ -> typecheck_func_defn_list tl env
-  )
-  | [] -> Some []
-and typecheck_defn(p : unit prog) env : ty prog option =
+  | [] -> Some ([], [])
+and typecheck_data_defn(p : unit prog) env : (ty prog * ty SymTable.t list) option =
   match p with
   | DataDef r -> (
-    let rec typecheck_cons_decl_list cons_list env = 
+    let rec typecheck_cons_decl_list cons_list env : (ty prog list * ty SymTable.t list) option = 
       match cons_list with
       | hd::tl -> (
         match typecheck_cons_decl hd env (Option.get (Env.lookup env ("data:" ^ r.data_name))) with
         | None -> None
-        | Some cons -> (
+        | Some (cons, constype) -> (
           match cons with
           | Cons c -> (
-            match typecheck_cons_decl_list tl ((Env.add (List.hd env) ("cons" ^ c.cons_name) (prop_of_prog cons))::[]) with
+            match typecheck_cons_decl_list tl ((Env.add SymTable.empty ("cons" ^ c.cons_name) constype)::env) with
             | None -> None
-            | Some list -> Some (cons::list)
+            | Some (list, env') -> Some ((cons::list), ((Env.add SymTable.empty ("cons" ^ c.cons_name) constype)::env'))
           )
           | _ -> assert false
         )
       )
-      | [] -> Some []
+      | [] -> Some ([], env)
     in
     match typecheck_cons_decl_list r.cons_list env with
     | None -> None
-    | Some list -> Some (DataDef {r with
+    | Some (list, env') -> Some (
+      (DataDef {r with
         prop = Option.get (Env.lookup env ("data:" ^ r.data_name));
         cons_list = list;
-      })
-  )
-  | TypeDef _r -> None
-  | FuncDef r -> (
-    match typecheck_expr r.expr env with
-    | Some expr' -> Some (FuncDef {r with 
-        prop = Unit;
-        arg_list = expr'::[];
-        return_type = expr';
-        expr = expr';
-      })
-    | _ -> None
+      }),
+        env'
+      )
   )
   | _ -> None
-and typecheck_cons_decl cons env (data : ty) : ty prog option =
+
+and typecheck_cons_decl cons env (data : ty) : (ty prog * ty) option =
   match cons with
   | Cons r -> (
     if Option.is_none (Env.lookup env ("cons" ^ r.cons_name)) 
@@ -476,27 +468,42 @@ and typecheck_cons_decl cons env (data : ty) : ty prog option =
         | [] -> Some []
       in
       if List.length r.cons_param_list == 0
-        then Some (Cons {r with
+        then Some ((Cons {r with
           prop = Func {
             ltype = Unit;
             rtype = data;
           };
           cons_param_list = [];
-        })
+        }),
+        (Constructor {
+          name = r.cons_name;
+          functype = Func {
+            ltype = Unit;
+            rtype = data;
+          };
+          data = data;
+        }))
         else match find_ty_cons_list r.cons_param_list env with
         | None -> None
-        | Some list -> Some (Cons {r with
-          prop = (
-            let rec find_func_prop (cp_list : ty prog list) : ty = 
-              match cp_list with
-              | hd::tl -> Func {
-                ltype = prop_of_prog hd;
-                rtype = find_func_prop tl;
-              }
-              | [] -> data
-          in find_func_prop list);
-          cons_param_list = list;
-        })
+        | Some list -> (
+          let rec find_func_prop (cp_list : ty prog list) : ty = 
+            match cp_list with
+            | hd::tl -> Func {
+              ltype = prop_of_prog hd;
+              rtype = find_func_prop tl;
+            }
+            | [] -> data
+          in let functype' = find_func_prop list 
+          in Some ((Cons {r with
+              prop = functype';
+              cons_param_list = list;
+            }),
+            (Constructor {
+              name = r.cons_name;
+              functype = functype';
+              data = data;
+            }))
+        )
     )
     else (prerr_string
       (string_of_positions r.pos 
@@ -506,6 +513,67 @@ and typecheck_cons_decl cons env (data : ty) : ty prog option =
     )
   )
   | _ -> assert false
+and typecheck_func_defn_list defn_list env : ty prog list option =
+  match defn_list with
+  | hd::tl -> (
+    match hd with
+    | FuncDef _r -> (
+      match typecheck_func_defn hd env with
+      | None -> None
+      | Some func -> (
+        match typecheck_func_defn_list tl env with
+        | None -> None
+        | Some func_list -> Some (func::func_list)
+      )
+    )
+    | _ -> typecheck_func_defn_list tl env
+  )
+  | [] -> Some []
+and typecheck_func_defn(p : unit prog) env : ty prog option =
+  match p with
+  | FuncDef r -> (
+    let rec typecheck_arg_list arg_list (func_ty : ty) : (ty prog list * ty SymTable.t) option =
+      match (arg_list, func_ty) with 
+      | (Arg hd::tl, Func re) -> (
+        match typecheck_arg_list tl re.rtype with
+        | None -> None
+        | Some (arglist, env') -> if Option.is_none (Env.lookup (env'::env) hd.arg_name)
+          then Some (Arg {hd with 
+            prop = re.ltype; 
+            types = Option.get (typecheck_types hd.types env None);}::arglist,
+            (Env.add env' hd.arg_name re.ltype))
+          else (
+            (prerr_string
+            (string_of_positions hd.pos 
+              ^ ": This argument name is duplicated. -> "
+              ^ hd.arg_name ^ " | in the function -> " ^ r.func_name ^ "\n");
+            None)
+          )
+      )
+      | ([], _) -> Some ([], SymTable.empty)
+      | _ -> None
+    in 
+    match typecheck_arg_list r.arg_list (Option.get (Env.lookup env r.func_name)) with
+    | None -> None
+    | Some (arg_list', env') -> 
+      match typecheck_expr r.expr (env'::env) with
+      | Some expr' -> let ret_ty = Option.get (typecheck_types r.return_type env None) in 
+        if type_compare (prop_of_prog ret_ty) (prop_of_prog expr')
+        then Some (FuncDef {r with 
+          prop = Option.get (Env.lookup env r.func_name);
+          arg_list = arg_list';
+          return_type = ret_ty;
+          expr = expr';
+        })
+        else (prerr_string
+          (string_of_positions r.pos 
+            ^ ": This return type is not match with expresstion type.\nreturn type -> "
+            ^ (string_of_type (prop_of_prog ret_ty)) ^ " | expr type -> " ^ (string_of_type (prop_of_prog expr'))
+            ^ "\nin the function -> " ^ r.func_name ^ "\n");
+          None)
+      | _ -> None
+  )
+  | _ -> None
 and typecheck_expr(p : unit prog) env : ty prog option =
   match p with
   | IntLit r -> Some (IntLit {r with prop = Integer})
@@ -518,8 +586,44 @@ and typecheck_expr(p : unit prog) env : ty prog option =
     | Some t -> Some (Ident {r with prop = t})
     | None -> None
   )
+  | IdentCons r -> (
+    match Env.lookup env ("cons" ^ r.name) with 
+    | Some Constructor t -> (
+      match t.functype with
+      | Func {ltype = Unit; rtype} -> Some (IdentCons {r with prop = rtype})
+      | _ -> Some (IdentCons {r with prop = t.functype})
+    )
+    | _ -> None
+  )
   | Unit _r -> Some (Unit {prop = Unit})
   | EmptyList _r -> Some (EmptyList {prop = List { list_type = EmptyList }}) (* prop = List EmptyList ??? *)
+  | FuncApp r -> (
+    match (typecheck_expr r.func env, typecheck_expr r.arg env) with
+    | (Some left', Some right') -> (
+      match (prop_of_prog left', prop_of_prog right') with
+      | (Func r', ty) -> (
+        if type_compare r'.ltype ty (*change typevar on r'.rtype*)
+        then (
+          Some (FuncApp {r with
+            prop = r'.rtype;
+            func = left';
+            arg = right';
+          })
+        )
+        else (prerr_string
+            (string_of_positions r.pos 
+              ^ ": This function app input type not match. -> "
+              ^ string_of_type r'.ltype ^ " and " ^ string_of_type ty ^ "\n");
+            None
+        )
+      )
+      | _ -> prerr_string
+        (string_of_positions r.pos
+          ^ ": This function app is not function type\n.");
+        None
+    )
+    | _ -> None
+  )
   | UnaExpr ({op = Sub; _} as r) -> (
     match typecheck_expr r.expr env with
     | Some expr' -> (
@@ -749,6 +853,36 @@ and typecheck_expr(p : unit prog) env : ty prog option =
       )
     | _ -> None
   )
+  | BinExpr ({op = Dot; _} as r) -> (
+    match (typecheck_expr r.left env, typecheck_expr r.right env) with
+    | (Some left', Some right') -> (
+      match (prop_of_prog left', prop_of_prog right') with
+      | (Func left, Func right) -> (
+        if String.equal (string_of_type left.ltype) (string_of_type right.rtype)
+        then (
+          Some (BinExpr {r with
+            prop = Func {
+              ltype = right.ltype; 
+              rtype = left.rtype;
+            };
+            left = left';
+            right = right';
+          })
+        )
+        else (prerr_string
+            (string_of_positions r.pos
+              ^ ": This function comp g.f type not match. -> "
+              ^ string_of_type left.ltype ^ " and " ^ string_of_type right.rtype ^ "\n");
+            None
+        )
+      )
+      | _ -> prerr_string
+        (string_of_positions r.pos
+          ^ ": This function comp is not function type\n.");
+        None
+    )
+    | _ -> None
+  )
   | IfExpr r -> (
     match typecheck_expr r.guard env with
     | Some guard' -> (
@@ -781,7 +915,127 @@ and typecheck_expr(p : unit prog) env : ty prog option =
       )
     | _ -> None
   )
+  | LetExpr r -> (
+    let rec typecheck_binding_list binding_list env : (ty prog list * ty SymTable.t) option =
+      match binding_list with
+      | hd::tl -> (
+        match typecheck_binding_list tl env with
+        | Some (list, env') -> (
+          match hd with
+          | Assign a -> (
+            match typecheck_expr a.expr env with
+            | Some expr' -> if Option.is_none (Env.lookup (env'::[]) a.ident)
+              then Some (
+                Assign {a with
+                  prop = prop_of_prog expr';
+                  expr = expr';
+                }::list,
+                Env.add env' a.ident (prop_of_prog expr')
+              )
+              else (prerr_string
+                (string_of_positions a.pos 
+                  ^ ": let binding variable name is duplicated. -> "
+                  ^ a.ident ^ "\n");
+                None)
+            | _ -> None
+          )
+          | FuncDefForLet f -> (
+            let rec typecheck_arg_list arg_list env : (ty prog list * ty SymTable.t) option =
+              match arg_list with 
+              | Arg hd::tl -> (
+                match typecheck_arg_list tl env with
+                | None -> None
+                | Some (arglist, env_in_let_func) -> if Option.is_none (Env.lookup (env_in_let_func::[]) hd.arg_name)
+                  then 
+                    match typecheck_types hd.types env None with
+                    | None -> None
+                    | Some arg_type -> Some (
+                      Arg {hd with 
+                        prop = prop_of_prog arg_type;
+                        types = arg_type;
+                      }::arglist,
+                      (Env.add env_in_let_func hd.arg_name (prop_of_prog arg_type)))
+                  else (
+                    (prerr_string
+                    (string_of_positions hd.pos 
+                      ^ ": This argument name is duplicated. -> "
+                      ^ hd.arg_name ^ " | in the let function -> " ^ f.func_name ^ "\n");
+                    None)
+                  )
+              )
+              | [] -> Some ([], SymTable.empty)
+              | _ -> None
+            in 
+              match typecheck_arg_list f.arg_list env with
+              | None -> None
+              | Some (arg_list', env_in_let_func) -> 
+                let rec find_func_type (arg_list : ty prog list) : ty option =
+                  match arg_list with 
+                  | Arg hd::tl -> (
+                    match find_func_type tl with
+                    | Some rt -> Some (Func {
+                      ltype = hd.prop;
+                      rtype = rt;
+                    })
+                    | _ -> None
+                  )
+                  | [] -> (
+                    match typecheck_types f.return_type env None with
+                    | Some t -> Some (prop_of_prog t)
+                    | _ -> None
+                  )
+                  | _ -> assert false
+                in
+                if Option.is_none (Env.lookup (env_in_let_func::[]) f.func_name)
+                then
+                  match find_func_type arg_list' with
+                  | None -> None
+                  | Some func_type ->
+                    match typecheck_expr f.expr ((Env.add env_in_let_func f.func_name func_type)::env) with
+                    | Some expr' -> let ret_ty = Option.get (typecheck_types f.return_type env None) in 
+                      if type_compare (prop_of_prog ret_ty) (prop_of_prog expr')
+                      then Some (
+                        FuncDefForLet {f with 
+                          prop = func_type;
+                          arg_list = arg_list';
+                          return_type = ret_ty;
+                          expr = expr';
+                        }::list,
+                        Env.add env' f.func_name func_type
+                      )
+                      else (prerr_string
+                        (string_of_positions r.pos 
+                          ^ ": This return type is not match with expresstion type.\nreturn type -> "
+                          ^ (string_of_type (prop_of_prog ret_ty)) ^ " | expr type -> " ^ (string_of_type (prop_of_prog expr'))
+                          ^ "\nin the function -> " ^ f.func_name ^ "\n");
+                        None)
+                    | _ -> None
+                else (prerr_string
+                  (string_of_positions f.pos 
+                    ^ ": This function name is same as argument name. -> "
+                    ^ f.func_name ^ " | in the let function -> " ^ f.func_name ^ "\n");
+                  None)
+          )
+          | _ -> None
+        )
+        | _ -> None
+      )
+      | [] -> Some ([], SymTable.empty)
+    in 
+    match typecheck_binding_list r.binding_list env with
+    | Some (blist, env') -> (
+      match typecheck_expr r.e_body (env'::env) with
+      | None -> None
+      | Some expr' -> Some (LetExpr {r with
+        prop = prop_of_prog expr';
+        binding_list = blist;
+        e_body = expr';
+      })
+    )
+    | _ -> None
+  )
   | _ -> None
+
 
 let typecheck(p : unit prog) : bool =
   match typecheck_prog p with

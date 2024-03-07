@@ -3,42 +3,41 @@ import utills
 data IntList = EmptyIntList | ConsIntList Integer IntList
 data Tree a = Leaf | Node a (Tree a) (Tree a)
 data List a = Empty | Cons a (List a)
+data Box a = Box a
 data PairList a b = EmptyPairList | ConsPairList (a,b) (PairList a b)
 data Pair a b = Pair a b
 (*type PairList a b = List (Pair a b)*)
+
 data ListList a = EmptyListList | ConsListList [a] (ListList a)
 
-def main (arg : Tree (List Integer)) : String = (1 + 2.0) * (5.25 - 3) / (-10 // 5 % 6)
+def main (arg : Tree (List Integer)) : Double = (1 + 2.0) * (5.25 - 3) / (-10 // 5 % 6)
 
-def main1 (arg : PairList c d) : String = True && False || True
+def main1 (arg : PairList c d) : Bool = True && False || True
 
-def main2 (arg : a -> Bool -> (List a)) : String = 'A'
+def main2 (arg : a -> Bool -> (List a)) : Char = 'A'
 
-def main3 (arg : String) : String = "hello"
+def main3 (arg : String)(x : Integer) : List Integer = Cons "a" (Cons 1 Empty)
 
-def main4 (arg : String) : String = if 1 >= 2.0 then 1 else 2
+def main4 (arg : String) : Integer = if 1 >= 2.0 then 1 else 2
 
-def main5 (arg : String) : String = if 5.0 == 5 then 1 else 2
+def main5 (arg : String) : Integer = if 5.0 == 5 then 1 else 2
 
-def main6 (arg : String) : String = 1::2::[]
+def main6 (arg : List Integer) : [Integer] = 1::2::[]
 
-def main7 (arg : String) : String = (1::2::[])++(3::[])
-(*
+def main7 (arg : String) : [Integer] = (1::2::[])++(3::[])
+
+def add (x : Tree (List Integer)) (y : Integer) : Integer = 0
+
+def test (x : Tree (List Integer)) (y : Integer) : Integer = add x y
+
+def showIntList (xs : [Integer]) : String = ""
+
+def sort (xs : [Integer]) : [Integer] = []
+
+def parseIntList (str : String) : [Integer] = []
+
+def main9 (arg : String) : String = showIntList . sort . parseIntList $ arg
+
+def main10 (arg : String) : Integer = let x = 1 and add (x : Integer) (y : Integer) : Integer = x + y and y = 2 in add x y
+
 def main8 (arg : String) : List Integer = Cons 1 (Cons 2 Empty)
-*)
-(* stack overflow -> maybe cause by lambda expr
-import pervasives
-
-def reverse (xs : [a]) : [a] =
-  foldl (\ (acc : [a]) (x : a) : [a] => x::acc) [] xs
-
-def parseInt (str : String) : Integer =
-  match str with
-  | [] -> error "not a number"
-  | hd::tl -> if hd == '-'
-        then 0 - parseInt tl
-        else foldl (\ (acc : Integer) (d : Integer) : Integer => 10 * acc + d)
-                0 (map charToDigit str)
-
-def main (arg : String) : String = arg  # does nothing
-*)

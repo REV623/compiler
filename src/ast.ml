@@ -330,6 +330,11 @@ type 't prog =
       pos : pos;
       name : string;
     }
+  | IdentCons of {
+      prop : 't;
+      pos : pos;
+      name : string;
+    }
   | Unit of {prop : 't;}
   | EmptyList of {prop : 't;}
   | Pairs of {
@@ -416,7 +421,7 @@ type 't prog =
   | Assign of {
       prop : 't;
       pos : pos;
-      ident : 't prog;
+      ident : string;
       expr : 't prog;
     }
   | FuncDefForLet of {
@@ -454,6 +459,7 @@ let prop_of_prog(prog : 't prog) : 't = match prog with
   | CharLit r -> r.prop
   | StringLit r -> r.prop
   | Ident r -> r.prop
+  | IdentCons r -> r.prop
   | Pairs r -> r.prop
   | FuncApp r -> r.prop
   | UnaExpr r -> r.prop
@@ -574,13 +580,13 @@ and string_of_expr expr : string = match expr with
   | LetExpr r -> "(let (" ^ string_of_letbinding_list r.binding_list ^ ") " ^ string_of_expr r.e_body ^ ")"
   | MatchExpr r -> "(match " ^ string_of_expr r.value ^ " (" ^ string_of_cases r.cases ^ "))"
   | IfExpr r -> "(if" ^ " " ^ string_of_expr r.guard ^ " " ^ string_of_expr r.conseq ^ " " ^ string_of_expr r.alter ^ ")"
-  | LambdaExpr r -> "(\\ (" ^ string_of_param r.arg_list ^ ") " ^ string_of_typeExpr r.return_type ^ " " ^ string_of_expr expr ^ ")\n"
+  | LambdaExpr r -> "(\\ (" ^ string_of_param r.arg_list ^ ") " ^ string_of_typeExpr r.return_type ^ " " ^ string_of_expr r.expr ^ ")\n"
   | _ -> ""
 and string_of_letbinding_list l_list : string = match l_list with
   | hd::tl -> string_of_letbinding hd ^ " " ^ string_of_letbinding_list tl
   | [] -> ""
 and string_of_letbinding binding : string = match binding with
-  | Assign r -> "(" ^ string_of_expr r.ident ^ " " ^ string_of_expr r.expr ^ ")"
+  | Assign r -> "(" ^ r.ident ^ " " ^ string_of_expr r.expr ^ ")"
   | FuncDefForLet r -> "(" ^ r.func_name ^ "(" ^ string_of_param r.arg_list ^ ") " ^ string_of_typeExpr r.return_type ^ " " ^ string_of_expr r.expr ^ ")"
   | _ -> ""
 and string_of_cases cases : string = match cases with

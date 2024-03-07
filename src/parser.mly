@@ -103,7 +103,7 @@ type_def:
     }}
 
 func_def:
-  | DEF; fname = IDENT; args_list = args_poly; ":"; return_type = types; "="; e = expr_all { FuncDef {
+  | DEF; fname = IDENT; args_list = args_poly; ":"; return_type = types_all; "="; e = expr_all { FuncDef {
       prop = ();
       pos = $loc;
       func_name = fname;
@@ -220,11 +220,7 @@ letbinding:
   | id = IDENT; "="; e = expr_all; { Assign {
       prop = ();
       pos = $loc;
-      ident = Ident {
-        prop = ();
-        pos = $loc;
-        name = id;
-      };
+      ident = id;
       expr = e;
     }}
 
@@ -579,6 +575,11 @@ func_app_expr: // left-assoc
 
 literal_expr:
   | id = IDENT { Ident {
+      prop = ();
+      pos = $loc;
+      name = id;
+    }}
+  | id = TYPECONS { IdentCons {
       prop = ();
       pos = $loc;
       name = id;
